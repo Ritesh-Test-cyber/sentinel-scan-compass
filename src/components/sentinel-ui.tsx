@@ -4,7 +4,7 @@ import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Globe, LoaderCircle
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import type { Scan, ScanStatus, Severity } from '@/lib/demo-data';
-import { findings } from '@/lib/demo-data';
+import type { Finding } from '@/lib/scanner-api';
 
 export function StatusBadge({ status }: { status: ScanStatus }) { return <span className={`status-badge status-${status.toLowerCase()}`}><span className="status-dot" />{status}</span>; }
 export function SeverityBadge({ severity }: { severity: Severity }) { return <span className={`severity-badge severity-${severity.toLowerCase()}`}>{severity}</span>; }
@@ -15,9 +15,9 @@ export function ScanTable({ rows }: { rows: Scan[] }) {
   if (!rows.length) return <EmptyState title="No scans found" description="Try another search or create a new demo scan." />;
   return <div className="table-scroll"><table className="scan-table"><thead><tr><th>Target</th><th>Status</th><th>Findings</th><th>Duration</th><th>Started</th><th aria-label="Open scan" /></tr></thead><tbody>{rows.map(scan => <tr key={scan.id}><td><Link to="/scans/$id" params={{ id: scan.id }} className="target-link"><span className="target-icon"><Globe size={16} /></span><span><strong>{scan.target}</strong><small>{scan.id} <span>· {scan.profile}</span></small></span></Link></td><td><StatusBadge status={scan.status} /></td><td><span className="findings-count">{scan.findings}</span>{scan.high > 0 && <span className="high-count">{scan.high} high</span>}</td><td className="muted-cell">{scan.duration}</td><td className="muted-cell">{scan.date}</td><td><Link to="/scans/$id" params={{ id: scan.id }} aria-label={`View scan ${scan.id}`} className="row-arrow"><ChevronRight size={17} /></Link></td></tr>)}</tbody></table></div>;
 }
-export function FindingCard({ finding }: { finding: typeof findings[number] }) {
+export function FindingCard({ finding }: { finding: Finding }) {
   const [open, setOpen] = useState(false);
-  return <article className="finding-card"><Button variant="ghost" className="finding-toggle" onClick={() => setOpen(!open)} aria-expanded={open}><SeverityBadge severity={finding.severity} /><span className="finding-heading"><strong>{finding.title}</strong><small>{finding.category} <span>· {finding.path}</span></small></span><ChevronDown className={open ? 'rotate-180' : ''} /></Button>{open && <div className="finding-body"><p>{finding.description}</p><h4>Demo evidence</h4><pre>{finding.evidence}</pre><h4>Remediation</h4><p>{finding.remediation}</p></div>}</article>;
+  return <article className="finding-card"><Button variant="ghost" className="finding-toggle" onClick={() => setOpen(!open)} aria-expanded={open}><SeverityBadge severity={finding.severity} /><span className="finding-heading"><strong>{finding.title}</strong><small>{finding.category} <span>· {finding.affectedUrl}</span></small><span className="finding-meta">{finding.confidence} confidence · {finding.verification}</span></span><ChevronDown className={open ? 'rotate-180' : ''} /></Button>{open && <div className="finding-body"><p>{finding.description}</p><h4>Demo evidence</h4><pre>{finding.evidence}</pre><h4>Remediation</h4><p>{finding.remediation}</p></div>}</article>;
 }
 export function EmptyState({ title = 'Nothing here yet', description = 'Your results will appear here.' }: { title?: string; description?: string }) { return <div className="empty-state"><Search size={28} /><h3>{title}</h3><p>{description}</p></div>; }
 export function LoadingState({ label = 'Loading scans…' }: { label?: string }) { return <div className="empty-state" role="status"><LoaderCircle className="animate-spin" /><p>{label}</p></div>; }

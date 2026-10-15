@@ -1,24 +1,30 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
-export const Route = createFileRoute("/")({
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useSuspenseQuery } from '@tanstack/react-query';
+import { ArrowDownToLine, ArrowRight, CalendarDays, CheckCheck, ChevronDown, CircleAlert, Plus, Radar, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { PageHeading, SummaryCard, ScanTable, LoadingState, ErrorState, EmptyState } from '@/components/sentinel-ui';
+import { pageHead, type Severity } from '@/lib/demo-data';
+import { scanListOptions, scannerApi, saveReport } from '@/lib/scanner-api';
+export const Route = createFileRoute('/')({
+  head: () => pageHead('Overview', 'Your WebSentinel security overview: authorized scan activity, severity trends, and recent demo findings.'),
+  loader: ({ context }) => context.queryClient.ensureQueryData(scanListOptions),
+  pendingComponent: LoadingState,
+  errorComponent: ({ reset }) => <ErrorState message="The demo overview could not be loaded. Please try again." retry={reset} />,
+  notFoundComponent: EmptyState,
   component: Index,
 });
-
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
+  const { data: scans } = useSuspenseQuery(scanListOptions); const [range, setRange] = useState('30'); const [exporting, setExporting] = useState(false); const [error, setError] = useState('');
+  const completed = scans.filter(s => s.status === 'Completed').length; const total = scans.reduce((n,s) => n+s.findings,0); const high = scans.reduce((n,s) => n+s.high,0);
+  const distribution: { severity: Severity; count: number }[] = (['Critical','High','Medium','Low','Info'] as const).map(severity => ({ severity, count: scans.reduce((n,s) => n + s.counts[severity],0) }));
+  let offset = 0;
+  const exportOverview = async () => { const scan = scans.find(s => s.status === 'Completed'); if (!scan || exporting) return; setExporting(true); try { saveReport(await scannerApi.exportReport(scan.id, 'json')); } catch { setError('The demo report could not be exported. Please try again.'); } finally { setExporting(false); } };
+  return <><PageHeading eyebrow="WORKSPACE OVERVIEW" title="Overview" description="A clear view of your application security posture."><div className="date-select"><CalendarDays size={14} /><select aria-label="Activity date range" value={range} onChange={e=>setRange(e.target.value)}><option value="30">Last 30 days</option><option value="7">Last 7 days</option></select><ChevronDown size={12} /></div><Button asChild><Link to="/scans/new"><Plus />New scan</Link></Button></PageHeading>
+    <div className="summary-grid"><SummaryCard title="Total scans" value={String(scans.length).padStart(2,'0')} icon={<Radar />} trend="↗ 2 this week" points="0,33 12,33 12,28 25,28 25,32 38,32 38,20 52,20 52,25 64,25 64,13 79,13 79,19 93,19 93,7 107,7 107,2 120,2" /><SummaryCard title="Completed scans" value={String(completed).padStart(2,'0')} icon={<CheckCheck />} trend="↗ 2 completed" tone="green" points="0,34 13,34 13,28 26,28 26,31 39,31 39,20 53,20 53,23 67,23 67,14 80,14 80,18 94,18 94,6 107,6 107,2 120,2" /><SummaryCard title="Total findings" value={String(total)} icon={<ShieldCheck />} trend="↗ 8 new findings" tone="yellow" points="0,31 12,31 12,26 24,26 24,29 38,29 38,16 52,16 52,21 66,21 66,10 79,10 79,14 93,14 93,5 107,5 107,1 120,1" /><SummaryCard title="High-severity findings" value={String(high).padStart(2,'0')} icon={<TriangleAlert />} trend="Across demo scans" tone="orange" points="0,29 12,29 12,22 25,22 25,27 40,27 40,16 53,16 53,22 66,22 66,10 80,10 80,18 93,18 93,8 107,8 107,8 120,8" /></div>
+    <div className="overview-middle"><section className="panel"><div className="panel-heading"><div><h2>Scan activity</h2><p>Scans and findings over the last {range} days</p></div><div className="chart-legend"><span><i className="legend-dot" />Scans</span><span><i className="legend-dot green" />Findings</span></div></div><div className="activity-chart"><svg viewBox="0 0 540 190" role="img" aria-label={`Illustrative scan and findings activity for the last ${range} days`} preserveAspectRatio="none">{[20,60,100,140].map((y,i)=><g key={y}><line x1="35" y1={y} x2="525" y2={y} className="chart-grid" /><text x="9" y={y+3} className="chart-text">{12-i*4}</text></g>)}<path d={range==='30'?'M35 125 L55 125 L74 113 L94 120 L113 120 L133 92 L153 102 L173 102 L193 70 L213 86 L233 86 L253 108 L273 96 L293 96 L313 52 L333 72 L353 72 L373 34 L393 56 L413 56 L433 80 L453 61 L473 61 L493 24 L513 42 L525 35 L525 140 L35 140Z':'M35 120 L115 100 L195 112 L275 65 L355 80 L435 35 L525 48 L525 140 L35 140Z'} className="chart-fill" /><path d={range==='30'?'M35 125 L55 125 L74 113 L94 120 L113 120 L133 92 L153 102 L173 102 L193 70 L213 86 L233 86 L253 108 L273 96 L293 96 L313 52 L333 72 L353 72 L373 34 L393 56 L413 56 L433 80 L453 61 L473 61 L493 24 L513 42 L525 35':'M35 120 L115 100 L195 112 L275 65 L355 80 L435 35 L525 48'} className="chart-scan-line" /><path d="M35 135 L55 135 L74 129 L94 133 L113 133 L133 118 L153 125 L173 125 L193 107 L213 119 L233 119 L253 130 L273 123 L293 123 L313 95 L333 112 L353 112 L373 87 L393 103 L413 103 L433 116 L453 102 L473 102 L493 77 L513 91 L525 86" className="chart-find-line" />{(range==='30'?['Sep 16','Sep 21','Sep 26','Oct 1','Oct 6','Oct 11','Oct 15']:['Oct 9','Oct 10','Oct 11','Oct 12','Oct 13','Oct 14','Oct 15']).map((day,i)=><text key={day} x={35+i*80} y="171" textAnchor={i===6?'end':'start'} className="chart-text">{day}</text>)}</svg></div></section>
+    <section className="panel"><div className="panel-heading"><div><h2>Severity distribution</h2><p>All findings by severity level</p></div><CircleAlert size={14} className="text-muted-foreground" /></div><div className="severity-chart-layout"><div className="donut"><svg viewBox="0 0 160 160" role="img" aria-label={`Demo findings by severity: ${distribution.map(d=>`${d.severity} ${d.count}`).join(', ')}`}><circle cx="80" cy="80" r="65" className="donut-track" />{distribution.filter(d=>d.count>0).map(d=>{ const length=d.count/Math.max(total,1)*408.4; const start=offset; offset+=length; return <circle key={d.severity} cx="80" cy="80" r="65" className={`severity-${d.severity.toLowerCase()}`} strokeDasharray={`${Math.max(0,length-4)} ${408.4-length+4}`} strokeDashoffset={-start} />; })}</svg><div className="donut-center"><strong>{total}</strong><small>Total findings</small></div></div><div className="severity-legend">{distribution.map(d=><div className="severity-legend-row" key={d.severity}><span className={`severity-dot severity-${d.severity.toLowerCase()}`} /><span>{d.severity}</span><strong>{d.count}</strong></div>)}</div></div></section></div>
+    <section className="panel scans-panel"><div className="panel-heading"><div className="section-title"><h2>Recent scans</h2><span className="section-count">{scans.length}</span></div><Link to="/scans" className="table-heading-link">View all scans <ArrowRight size={13} /></Link></div><ScanTable rows={scans.slice(0,5)} /><div className="table-bottom"><span>Showing {Math.min(5,scans.length)} of {scans.length} demo scans</span><Button variant="ghost" size="sm" onClick={exportOverview} disabled={exporting}><ArrowDownToLine size={12} />{exporting?'Exporting…':'Export demo report'}</Button></div></section>{error&&<p role="alert" className="form-error">{error}</p>}
+    <div className="overview-bottom"><div className="insight"><ShieldCheck size={20} /><div><h3>Your scope. Your control.</h3><p>Every assessment starts with permission. Keep your testing safe and within scope.</p><Link to="/settings">Manage safety limits <ArrowRight size={11} /></Link></div></div><div className="insight"><Radar size={20} /><div><h3>A stronger security baseline</h3><p>Regular assessments help you catch small issues before they become bigger risks.</p><Link to="/scans/new">Start a new scan <ArrowRight size={11} /></Link></div></div></div>
+  </>;
 }

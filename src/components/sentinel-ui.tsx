@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Globe, LoaderCircle, Search, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Copy, Globe, LoaderCircle, Search, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import type { Scan, ScanStatus, Severity } from '@/lib/demo-data';
+import { limitationsNotice, redactEvidence } from '@/lib/evidence';
 import type { Finding } from '@/lib/scanner-api';
 
 export function StatusBadge({ status }: { status: ScanStatus }) { return <span className={`status-badge status-${status.toLowerCase()}`}><span className="status-dot" />{status}</span>; }
-export function SeverityBadge({ severity }: { severity: Severity }) { return <span className={`severity-badge severity-${severity.toLowerCase()}`}>{severity}</span>; }
+export function SeverityBadge({ severity }: { severity: Severity }) { return <span className={`severity-badge severity-${severity.toLowerCase()}`}>{severity === 'Info' ? 'Informational' : severity}</span>; }
 export function SummaryCard({ title, value, icon, trend, points, tone = 'blue' }: { title: string; value: string; icon: ReactNode; trend: string; points: string; tone?: string }) {
   return <article className={`summary-card tone-${tone}`}><div className="summary-label">{title}<span className="summary-icon">{icon}</span></div><div className="summary-main"><strong>{value}</strong><svg viewBox="0 0 120 40" role="img" aria-label={`${title} demo trend`}><polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg></div><div className="summary-trend">{trend}<span>vs. last month</span></div></article>;
 }
@@ -17,7 +18,14 @@ export function ScanTable({ rows }: { rows: Scan[] }) {
 }
 export function FindingCard({ finding }: { finding: Finding }) {
   const [open, setOpen] = useState(false);
-  return <article className="finding-card"><Button variant="ghost" className="finding-toggle" onClick={() => setOpen(!open)} aria-expanded={open}><SeverityBadge severity={finding.severity} /><span className="finding-heading"><strong>{finding.title}</strong><small>{finding.category} <span>· {finding.affectedUrl}</span></small><span className="finding-meta">{finding.confidence} confidence · {finding.verification}</span></span><ChevronDown className={open ? 'rotate-180' : ''} /></Button>{open && <div className="finding-body"><p>{finding.description}</p><h4>Demo evidence</h4><pre>{finding.evidence}</pre><h4>Remediation</h4><p>{finding.remediation}</p></div>}</article>;
+  const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
+  const safe = (text: string) => redactEvidence(text);
+  const copy = async (value: string, label: string) => {
+    setFeedback(null);
+    try { if (!navigator.clipboard) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(safe(value)); setFeedback({ error: false, text: `${label} copied. Sensitive values are redacted.` }); }
+    catch { setFeedback({ error: true, text: `Could not copy ${label.toLowerCase()}. Select the redacted text below and copy it manually.` }); }
+  };
+  return <article className="finding-card"><Button variant="ghost" className="finding-toggle" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls={`finding-${finding.id}`}><SeverityBadge severity={finding.severity} /><span className="finding-heading"><strong>{safe(finding.title)}</strong><small>{safe(finding.category)} <span>· {safe(finding.affectedUrl)}</span></small><span className="finding-meta">Confidence: <strong>{finding.confidence}</strong><span className={`verification verification-${finding.verification.toLowerCase().replace(' ', '-')}`}>Verification: {finding.verification}</span></span></span><ChevronDown className={open ? 'rotate-180' : ''} /></Button>{open && <div className="finding-body" id={`finding-${finding.id}`}><div className="finding-evidence-toolbar"><span className="scan-id">{safe(finding.id)}</span><Button variant="outline" size="sm" onClick={() => copy(finding.id, 'Finding ID')}><Copy />Copy finding ID</Button></div><dl className="finding-context"><div><dt>Category</dt><dd>{safe(finding.category)}</dd></div><div><dt>Affected endpoint</dt><dd>{safe(finding.affectedUrl)}</dd></div><div><dt>First detected</dt><dd>{finding.firstDetectedAt ? new Date(finding.firstDetectedAt).toLocaleString('en-GB', { timeZone: 'UTC' }) + ' UTC' : 'Not provided'}</dd></div></dl><h4>Observation</h4><p>{safe(finding.description)}</p><div className="finding-evidence-toolbar"><h4>Observed evidence · demo</h4><Button variant="outline" size="sm" onClick={() => copy(finding.evidence, 'Evidence')}><Copy />Copy evidence</Button></div><pre tabIndex={0} aria-label="Redacted evidence">{safe(finding.evidence)}</pre><p className="evidence-redaction-note">Sensitive values are redacted. Evidence is untrusted text, not executable content.</p>{feedback && <p role={feedback.error ? 'alert' : 'status'} className={feedback.error ? 'form-error' : 'saved-message'}>{feedback.text}</p>}<h4>Why it matters</h4><p>{safe(finding.whyItMatters)}</p><h4>Recommended remediation</h4><p>{safe(finding.remediation)}</p>{Boolean(finding.relatedEndpoints?.length) && <><h4>Related endpoints</h4><ul className="related-endpoints">{finding.relatedEndpoints?.map(endpoint => <li key={endpoint}>{safe(endpoint)}</li>)}</ul></>}<div className="inline-notice"><AlertCircle size={16} /><span>{limitationsNotice}</span></div></div>}</article>;
 }
 export function EmptyState({ title = 'Nothing here yet', description = 'Your results will appear here.' }: { title?: string; description?: string }) { return <div className="empty-state"><Search size={28} /><h3>{title}</h3><p>{description}</p></div>; }
 export function LoadingState({ label = 'Loading scans…' }: { label?: string }) { return <div className="empty-state" role="status"><LoaderCircle className="animate-spin" /><p>{label}</p></div>; }

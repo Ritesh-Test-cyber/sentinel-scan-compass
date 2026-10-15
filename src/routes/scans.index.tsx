@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorState, LoadingState, PageHeading, StatusBadge } from '@/components/sentinel-ui';
 import { pageHead, type ScanStatus, type Severity } from '@/lib/demo-data';
 import { scanListOptions } from '@/lib/scanner-api';
-export const Route = createFileRoute('/scans/')({ head: () => pageHead('Scan history', 'Search and filter your authorized WebSentinel demo scans, statuses, and findings.'), loader: ({context})=>context.queryClient.ensureQueryData(scanListOptions), pendingComponent: LoadingState, errorComponent: ScanHistoryError, notFoundComponent: EmptyState, component: ScanHistory });
+export const Route = createFileRoute('/scans/')({ head: () => pageHead('Scan history', 'Search and filter your authorized WebSentinel demo scans, statuses, and findings.'), loader: ({context})=>context.queryClient.ensureQueryData(scanListOptions), pendingComponent: LoadingState, errorComponent: ScanHistoryError, notFoundComponent: () => <EmptyState />, component: ScanHistory });
 function ScanHistoryError({reset}:{reset:()=>void}) {const router=useRouter();return <ErrorState message="Scan history could not be loaded. Please try again." retry={()=>{router.invalidate();reset();}}/>;}
 const severities: Severity[] = ['Critical','High','Medium','Low','Info'];
 function ScanHistory(){

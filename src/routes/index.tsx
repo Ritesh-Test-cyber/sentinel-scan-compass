@@ -11,7 +11,7 @@ export const Route = createFileRoute('/')({
   loader: ({ context }) => context.queryClient.ensureQueryData(scanListOptions),
   pendingComponent: LoadingState,
   errorComponent: ({ reset }) => <ErrorState message="The demo overview could not be loaded. Please try again." retry={reset} />,
-  notFoundComponent: EmptyState,
+  notFoundComponent: () => <EmptyState />,
   component: Index,
 });
 function Index() {

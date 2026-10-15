@@ -10,33 +10,87 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ScansRouteImport } from './routes/scans'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ScansIndexRouteImport } from './routes/scans.index'
+import { Route as ScansIdRouteImport } from './routes/scans.$id'
+import { Route as ScansNewRouteImport } from './routes/scans.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ScansRoute = ScansRouteImport.update({
+  id: '/scans',
+  path: '/scans',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScansIndexRoute = ScansIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ScansRoute,
+} as any)
+const ScansIdRoute = ScansIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ScansRoute,
+} as any)
+const ScansNewRoute = ScansNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => ScansRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/scans': typeof ScansRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/scans/$id': typeof ScansIdRoute
+  '/scans/new': typeof ScansNewRoute
+  '/scans/': typeof ScansIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
+  '/scans/$id': typeof ScansIdRoute
+  '/scans/new': typeof ScansNewRoute
+  '/scans': typeof ScansIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/scans': typeof ScansRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/scans/$id': typeof ScansIdRoute
+  '/scans/new': typeof ScansNewRoute
+  '/scans/': typeof ScansIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    '/' | '/scans' | '/settings' | '/scans/$id' | '/scans/new' | '/scans/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/settings' | '/scans/$id' | '/scans/new' | '/scans'
+  id:
+    | '__root__'
+    | '/'
+    | '/scans'
+    | '/settings'
+    | '/scans/$id'
+    | '/scans/new'
+    | '/scans/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ScansRoute: typeof ScansRouteWithChildren
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +102,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/scans': {
+      id: '/scans'
+      path: '/scans'
+      fullPath: '/scans'
+      preLoaderRoute: typeof ScansRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scans/': {
+      id: '/scans/'
+      path: '/'
+      fullPath: '/scans/'
+      preLoaderRoute: typeof ScansIndexRouteImport
+      parentRoute: typeof ScansRoute
+    }
+    '/scans/$id': {
+      id: '/scans/$id'
+      path: '/$id'
+      fullPath: '/scans/$id'
+      preLoaderRoute: typeof ScansIdRouteImport
+      parentRoute: typeof ScansRoute
+    }
+    '/scans/new': {
+      id: '/scans/new'
+      path: '/new'
+      fullPath: '/scans/new'
+      preLoaderRoute: typeof ScansNewRouteImport
+      parentRoute: typeof ScansRoute
+    }
   }
 }
 
+interface ScansRouteChildren {
+  ScansIdRoute: typeof ScansIdRoute
+  ScansNewRoute: typeof ScansNewRoute
+  ScansIndexRoute: typeof ScansIndexRoute
+}
+
+const ScansRouteChildren: ScansRouteChildren = {
+  ScansIdRoute: ScansIdRoute,
+  ScansNewRoute: ScansNewRoute,
+  ScansIndexRoute: ScansIndexRoute,
+}
+
+const ScansRouteWithChildren = ScansRoute._addFileChildren(ScansRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ScansRoute: ScansRouteWithChildren,
+  SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

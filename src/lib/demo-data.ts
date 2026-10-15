@@ -1,5 +1,5 @@
 export type Severity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
-export type ScanStatus = 'Completed' | 'Running' | 'Failed' | 'Queued';
+export type ScanStatus = 'Completed' | 'Running' | 'Failed' | 'Pending' | 'Cancelled';
 export type Scan = { id: string; target: string; name: string; status: ScanStatus; date: string; duration: string; findings: number; high: number; profile: string };
 export const scans: Scan[] = [
   { id: 'WS-0024', target: 'app.acme.io', name: 'Acme production', status: 'Completed', date: 'Oct 15, 2026 · 10:42', duration: '4m 32s', findings: 12, high: 3, profile: 'Standard' },

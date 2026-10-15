@@ -1,0 +1,26 @@
+import { useState, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
+import { AlertCircle, ArrowRight, ChevronDown, ChevronRight, Globe, LoaderCircle, Search, ShieldCheck } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import type { Scan, ScanStatus, Severity } from '@/lib/demo-data';
+import { findings } from '@/lib/demo-data';
+
+export function StatusBadge({ status }: { status: ScanStatus }) { return <span className={`status-badge status-${status.toLowerCase()}`}><span className="status-dot" />{status}</span>; }
+export function SeverityBadge({ severity }: { severity: Severity }) { return <span className={`severity-badge severity-${severity.toLowerCase()}`}>{severity}</span>; }
+export function SummaryCard({ title, value, icon, trend, points, tone = 'blue' }: { title: string; value: string; icon: ReactNode; trend: string; points: string; tone?: string }) {
+  return <article className={`summary-card tone-${tone}`}><div className="summary-label">{title}<span className="summary-icon">{icon}</span></div><div className="summary-main"><strong>{value}</strong><svg viewBox="0 0 120 40" role="img" aria-label={`${title} demo trend`}><polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg></div><div className="summary-trend">{trend}<span>vs. last month</span></div></article>;
+}
+export function ScanTable({ rows }: { rows: Scan[] }) {
+  if (!rows.length) return <EmptyState title="No scans found" description="Try another search or create a new demo scan." />;
+  return <div className="table-scroll"><table className="scan-table"><thead><tr><th>Target</th><th>Status</th><th>Findings</th><th>Duration</th><th>Started</th><th aria-label="Open scan" /></tr></thead><tbody>{rows.map(scan => <tr key={scan.id}><td><Link to="/scans/$id" params={{ id: scan.id }} className="target-link"><span className="target-icon"><Globe size={16} /></span><span><strong>{scan.target}</strong><small>{scan.id} <span>· {scan.profile}</span></small></span></Link></td><td><StatusBadge status={scan.status} /></td><td><span className="findings-count">{scan.findings}</span>{scan.high > 0 && <span className="high-count">{scan.high} high</span>}</td><td className="muted-cell">{scan.duration}</td><td className="muted-cell">{scan.date}</td><td><Link to="/scans/$id" params={{ id: scan.id }} aria-label={`View scan ${scan.id}`} className="row-arrow"><ChevronRight size={17} /></Link></td></tr>)}</tbody></table></div>;
+}
+export function FindingCard({ finding }: { finding: typeof findings[number] }) {
+  const [open, setOpen] = useState(false);
+  return <article className="finding-card"><Button variant="ghost" className="finding-toggle" onClick={() => setOpen(!open)} aria-expanded={open}><SeverityBadge severity={finding.severity} /><span className="finding-heading"><strong>{finding.title}</strong><small>{finding.category} <span>· {finding.path}</span></small></span><ChevronDown className={open ? 'rotate-180' : ''} /></Button>{open && <div className="finding-body"><p>{finding.description}</p><h4>Demo evidence</h4><pre>{finding.evidence}</pre><h4>Remediation</h4><p>{finding.remediation}</p></div>}</article>;
+}
+export function EmptyState({ title = 'Nothing here yet', description = 'Your results will appear here.' }: { title?: string; description?: string }) { return <div className="empty-state"><Search size={28} /><h3>{title}</h3><p>{description}</p></div>; }
+export function LoadingState({ label = 'Loading scans…' }: { label?: string }) { return <div className="empty-state" role="status"><LoaderCircle className="animate-spin" /><p>{label}</p></div>; }
+export function ErrorState({ message, retry }: { message: string; retry?: () => void }) { return <div className="empty-state" role="alert"><AlertCircle /><h3>Unable to load this scan</h3><p>{message}</p>{retry && <Button variant="outline" onClick={retry}>Try again</Button>}</div>; }
+export function ConfirmDialog({ open, onOpenChange, onConfirm, title, description, confirmLabel = 'Confirm' }: { open: boolean; onOpenChange: (open: boolean) => void; onConfirm: () => void; title: string; description: string; confirmLabel?: string }) { return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><ShieldCheck className="text-primary" size={28} /><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={onConfirm}>{confirmLabel}<ArrowRight /></Button></DialogFooter></DialogContent></Dialog>; }
+export function PageHeading({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children?: ReactNode }) { return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div><div className="heading-actions">{children}</div></div>; }

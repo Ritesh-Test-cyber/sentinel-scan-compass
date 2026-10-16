@@ -26,7 +26,7 @@ export function resolveApiConfig(env: { baseUrl?: string | undefined; useMock?: 
 }
 
 export const apiConfig: ApiConfig = resolveApiConfig({
-  baseUrl: import.meta.env.VITE_API_BASE_URL as string | undefined,
-  useMock: import.meta.env.VITE_USE_MOCK_API as string | undefined,
+  baseUrl: import.meta.env['VITE_API_BASE_URL'] as string | undefined,
+  useMock: import.meta.env['VITE_USE_MOCK_API'] as string | undefined,
   dev: Boolean(import.meta.env.DEV),
 });

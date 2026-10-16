@@ -1,70 +1,75 @@
 import { queryOptions } from '@tanstack/react-query';
-import { z } from 'zod';
-import { scans as demoScans, findings as demoFindings, type Scan, type Severity } from './demo-data';
+import { scans as demoScans, findings as demoFindings } from './demo-data';
 import { limitationsNotice, redactEvidence } from './evidence';
+import { apiConfig } from './api-config';
+import { ApiError, ScanNotFoundError } from './api-errors';
+import { createDisconnectedScannerApi, createHttpScannerApi } from './http-scanner-api';
+import { activeStatuses, createScanSchema, emptyCounts, type Finding, type Report, type ReportFormat, type ScannerApi, type ScanRecord } from './scanner-types';
 
-export const createScanSchema = z.object({
-  target: z.string().trim().min(1, 'Enter a target base URL.').max(2048, 'The URL is too long.').url('Enter a valid URL, for example https://app.example.com.').refine(value => { try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password; } catch { return false; } }, 'Use an http:// or https:// URL without embedded credentials.'),
-  name: z.string().trim().max(100, 'Use 100 characters or fewer.').optional(),
-  profile: z.enum(['Basic', 'Standard']),
-  authorized: z.boolean().refine(value => value, 'Confirm that you own this system or have explicit permission to test it.'),
-});
-export type CreateScanInput = z.infer<typeof createScanSchema>;
-export type Finding = typeof demoFindings[number] & { confidence: 'High' | 'Medium' | 'Low'; verification: 'Potential' | 'Confirmed' | 'False positive'; affectedUrl: string; whyItMatters: string; firstDetectedAt?: string; relatedEndpoints?: string[] };
-export type SeverityCounts = Record<Severity, number>;
-export type ScanRecord = Scan & { demo: true; createdAt: string; startedAt: string | null; completedAt: string | null; endpoints: number; counts: SeverityCounts; results: Finding[]; error?: string };
-export type ReportFormat = 'json' | 'html';
-export type Report = { filename: string; content: string; mime: string };
-export interface ScannerApi {
-  readonly mode: 'mock' | 'live';
-  readonly capabilities: { settings: boolean; authorizedTargets: boolean };
-  listScans(): Promise<ScanRecord[]>;
-  getScan(id: string): Promise<ScanRecord>;
-  createScan(input: CreateScanInput): Promise<ScanRecord>;
-  supportedReports: readonly ReportFormat[];
-  exportReport(id: string, format: ReportFormat): Promise<Report>;
-}
-export class ScanNotFoundError extends Error { constructor() { super('This scan does not exist in the current demo workspace.'); this.name = 'ScanNotFoundError'; } }
+export * from './scanner-types';
+export { ApiError, ScanNotFoundError } from './api-errors';
+
 const pause = () => new Promise<void>(resolve => setTimeout(resolve, 450));
-const emptyCounts = (): SeverityCounts => ({ Critical: 0, High: 0, Medium: 0, Low: 0, Info: 0 });
-let records: ScanRecord[] = demoScans.map((scan, index) => {
-  const createdAt = ['2026-10-15T10:42:00Z', '2026-10-15T10:38:00Z', '2026-10-14T16:20:00Z', '2026-10-14T14:05:00Z', '2026-10-13T09:15:00Z', '2026-10-12T11:30:00Z'][index] ?? '2026-10-12T11:30:00Z';
-  const results: Finding[] = Array.from({ length: scan.findings }, (_, i) => {
-    const template = i < scan.high ? demoFindings[i % 3] : demoFindings[3 + i % 2];
-    const fallback = demoFindings[0];
-    if (!template || !fallback) throw new Error('Demo fixture missing');
-    const item = template ?? fallback;
-    return { ...item, id: `${scan.id}-F-${i + 1}`, title: i < 5 ? item.title : `${item.title} (${['/account', '/dashboard', '/api/v1', '/settings'][i % 4]})`, confidence: i % 3 === 0 ? 'Medium' : 'High', verification: 'Potential', whyItMatters: 'This configuration may weaken defense in depth in some contexts. The observed response alone does not establish exploitability; assess application behavior and compensating controls before prioritizing a fix.', firstDetectedAt: createdAt, relatedEndpoints: [`https://${scan.target}/`, `https://${scan.target}/account`], affectedUrl: `https://${scan.target}${i < 5 ? item.path : ['/account', '/dashboard', '/api/v1', '/settings'][i % 4]}` };
+function seed(): ScanRecord[] {
+  return demoScans.map((scan, index) => {
+    const createdAt = ['2026-10-15T10:42:00Z', '2026-10-15T10:38:00Z', '2026-10-14T16:20:00Z', '2026-10-14T14:05:00Z', '2026-10-13T09:15:00Z', '2026-10-12T11:30:00Z'][index] ?? '2026-10-12T11:30:00Z';
+    const results: Finding[] = Array.from({ length: scan.findings }, (_, i) => {
+      const item = (i < scan.high ? demoFindings[i % 3] : demoFindings[3 + i % 2]) ?? demoFindings[0];
+      if (!item) throw new Error('Demo fixture missing');
+      const path = i < 5 ? item.path : ['/account', '/dashboard', '/api/v1', '/settings'][i % 4];
+      return { ...item, id: `${scan.id}-F-${i + 1}`, title: i < 5 ? item.title : `${item.title} (${path})`, confidence: i % 3 === 0 ? 'Medium' : 'High', verification: 'Potential', whyItMatters: 'This configuration may weaken defense in depth in some contexts. The observed response alone does not establish exploitability; assess application behavior and compensating controls before prioritizing a fix.', firstDetectedAt: createdAt, relatedEndpoints: [`https://${scan.target}/`, `https://${scan.target}/account`], affectedUrl: `https://${scan.target}${path}` };
+    });
+    const counts = emptyCounts(); results.forEach(f => counts[f.severity]++);
+    return { ...scan, profile: scan.profile === 'Passive' ? 'Basic' : 'Standard', demo: true, createdAt, startedAt: createdAt, completedAt: scan.status === 'Completed' || scan.status === 'Failed' ? new Date(new Date(createdAt).getTime() + 272000).toISOString() : null, endpoints: scan.findings ? 38 - index * 4 : 0, counts, results, scope: 'Demo scope: target base URL only', reportFormats: scan.status === 'Completed' ? ['json', 'html'] : [], canCancel: false, ...(scan.status === 'Failed' ? { error: 'Simulated connection timeout. No actual network request was made.' } : {}) };
   });
-  const counts = emptyCounts(); results.forEach(f => counts[f.severity]++);
-  return { ...scan, profile: scan.profile === 'Passive' ? 'Basic' : 'Standard', demo: true, createdAt, startedAt: createdAt, completedAt: scan.status === 'Completed' || scan.status === 'Failed' ? new Date(new Date(createdAt).getTime() + 272000).toISOString() : null, endpoints: scan.findings ? 38 - index * 4 : 0, counts, results, ...(scan.status === 'Failed' ? { error: 'Simulated connection timeout. No actual network request was made.' } : {}) };
-});
-// MOCK ONLY: no network requests, no target resolution, no actual security tests.
-// A live FastAPI implementation MUST enforce identity/ownership and authorization,
-// destination IP/DNS checks on each connection, redirects, timeouts and request limits.
-// Neither this adapter nor browser validation is a live-scanning security boundary.
+}
+// MOCK ONLY (local UI development): no network requests, no target resolution, no security tests.
+// The live FastAPI backend MUST enforce identity/ownership and authorization, destination IP/DNS
+// checks on each connection, redirects, timeouts and request limits.
 export function redactScan(scan: ScanRecord): ScanRecord {
   const redactValue = (value: unknown): unknown => typeof value === 'string' ? redactEvidence(value) : Array.isArray(value) ? value.map(redactValue) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactValue(item)])) : value;
   return redactValue(scan) as ScanRecord;
 }
-const escapeHtml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
-export const scannerApi: ScannerApi = {
-  mode: 'mock', capabilities: { settings: false, authorizedTargets: false }, supportedReports: ['json', 'html'],
-  async listScans() { await pause(); return records.map(redactScan); },
-  async getScan(id) { await pause(); const scan = records.find(s => s.id === id); if (!scan) throw new ScanNotFoundError(); return redactScan(scan); },
-  async createScan(input) {
-    const valid = createScanSchema.parse(input); await new Promise(resolve => setTimeout(resolve, 1000));
-    const now = new Date().toISOString(); const id = `DEMO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-    const scan: ScanRecord = { id, target: valid.target, name: valid.name || new URL(valid.target).hostname, profile: valid.profile, status: 'Pending', date: new Date(now).toLocaleString('en-GB', { timeZone: 'UTC' }) + ' UTC', duration: '—', findings: 0, high: 0, demo: true, createdAt: now, startedAt: null, completedAt: null, endpoints: 0, counts: emptyCounts(), results: [] };
-    records = [scan, ...records]; return scan;
-  },
-  async exportReport(id, format) {
-    const scan = redactScan(await this.getScan(id));
-    if (scan.status !== 'Completed') throw new Error('Reports are available for completed demo scans only.');
-    const notice = 'DEMO REPORT — Illustrative data only. No security testing was performed.';
-    return format === 'json' ? { filename: `websentinel-demo-${id}.json`, mime: 'application/json', content: JSON.stringify({ notice, limitations: limitationsNotice, scan }, null, 2) } : { filename: `websentinel-demo-${id}.html`, mime: 'text/html', content: `<!doctype html><html lang="en"><meta charset="utf-8"><title>WebSentinel demo report</title><body><h1>WebSentinel — Demo report</h1><p>${notice}</p><p>${escapeHtml(limitationsNotice)}</p><h2>${escapeHtml(scan.target)}</h2><p>Scan ${escapeHtml(id)}</p>${scan.results.map(f => `<article><h3>${escapeHtml(f.severity)}: ${escapeHtml(f.title)}</h3><p>Finding ID: ${escapeHtml(f.id)}</p><p>Confidence: ${escapeHtml(f.confidence)} · Verification: ${escapeHtml(f.verification)}</p><p>Category: ${escapeHtml(f.category)}</p><p>Endpoint: ${escapeHtml(f.affectedUrl)}</p><p>${escapeHtml(f.description)}</p><h4>Observed demo evidence</h4><pre>${escapeHtml(f.evidence)}</pre><h4>Why it matters</h4><p>${escapeHtml(f.whyItMatters)}</p><p>First detected: ${escapeHtml(f.firstDetectedAt ?? "Not available")}</p><p>Related endpoints: ${(f.relatedEndpoints ?? []).map(escapeHtml).join(", ")}</p><p>Remediation: ${escapeHtml(f.remediation)}</p></article>`).join('')}</body></html>` };
-  },
-};
-export const scanListOptions = queryOptions({ queryKey: ['scans'], queryFn: () => scannerApi.listScans() });
-export const scanOptions = (id: string) => queryOptions({ queryKey: ['scans', id], queryFn: () => scannerApi.getScan(id), retry: (count, error) => !(error instanceof ScanNotFoundError) && count < 2 });
-export function saveReport(report: Report) { const url = URL.createObjectURL(new Blob([report.content], { type: report.mime })); const a = document.createElement('a'); a.href = url; a.download = report.filename; a.click(); URL.revokeObjectURL(url); }
+export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+export function createMockScannerApi(): ScannerApi {
+  let records: ScanRecord[] | null = null;
+  const all = () => (records ??= seed());
+  return {
+    mode: 'mock', capabilities: { settings: false, authorizedTargets: false },
+    async health() { return { ok: true, mode: 'mock' }; },
+    async listScans() { await pause(); return all().map(redactScan); },
+    async getScan(id) { await pause(); const scan = all().find(s => s.id === id); if (!scan) throw new ScanNotFoundError('This scan does not exist in the current demo workspace. Demo records reset on refresh.'); return redactScan(scan); },
+    async createScan(input) {
+      const valid = createScanSchema.parse(input); await new Promise(resolve => setTimeout(resolve, 1000));
+      const now = new Date().toISOString(); const id = `DEMO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const scan: ScanRecord = { id, target: valid.target, name: valid.name || new URL(valid.target).hostname, profile: valid.profile, status: 'Pending', date: new Date(now).toLocaleString('en-GB', { timeZone: 'UTC' }) + ' UTC', duration: '—', findings: 0, high: 0, demo: true, createdAt: now, startedAt: null, completedAt: null, endpoints: 0, counts: emptyCounts(), results: [], scope: 'Demo scope: target base URL only', reportFormats: [], canCancel: true };
+      records = [scan, ...all()]; return scan;
+    },
+    async cancelScan(id) {
+      await pause(); const scan = all().find(s => s.id === id); if (!scan) throw new ScanNotFoundError();
+      if (!scan.canCancel) throw new ApiError('validation', { message: 'Only pending or running scans can be cancelled.' });
+      const updated: ScanRecord = { ...scan, status: 'Cancelled', canCancel: false, completedAt: new Date().toISOString() };
+      records = all().map(s => s.id === id ? updated : s); return redactScan(updated);
+    },
+    async exportReport(id, format) {
+      const scan = redactScan(await this.getScan(id));
+      if (!scan.reportFormats.includes(format)) throw new ApiError('not_found', { message: 'Reports are available for completed demo scans only.' });
+      const notice = 'DEMO REPORT — Illustrative data only. No security testing was performed.';
+      const e = escapeHtml;
+      return format === 'json'
+        ? { filename: `websentinel-demo-${id}.json`, mime: 'application/json', content: JSON.stringify({ notice, limitations: limitationsNotice, scan }, null, 2) }
+        : { filename: `websentinel-demo-${id}.html`, mime: 'text/html', content: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>WebSentinel demo report</title></head><body><h1>WebSentinel — Demo report</h1><p>${notice}</p><p>${e(limitationsNotice)}</p><h2>${e(scan.target)}</h2><p>Scan ${e(id)} · Status ${e(scan.status)} · Scope ${e(scan.scope ?? 'Not provided')}</p><p>Started ${e(scan.startedAt ?? '—')} · Completed ${e(scan.completedAt ?? '—')}</p><p>Summary: ${Object.entries(scan.counts).map(([k, v]) => `${e(k)} ${v}`).join(', ')}</p>${scan.results.map(f => `<article><h3>${e(f.severity)}: ${e(f.title)}</h3><p>Finding ID: ${e(f.id)}</p><p>Confidence: ${e(f.confidence)} · Verification: ${e(f.verification)}</p><p>Category: ${e(f.category)}</p><p>Endpoint: ${e(f.affectedUrl)}</p><p>${e(f.description)}</p><h4>Observed demo evidence</h4><pre>${e(f.evidence)}</pre><h4>Why it matters</h4><p>${e(f.whyItMatters)}</p><p>First detected: ${e(f.firstDetectedAt ?? 'Not available')}</p><p>Related endpoints: ${(f.relatedEndpoints ?? []).map(e).join(', ')}</p><p>Remediation: ${e(f.remediation)}</p></article>`).join('')}</body></html>` };
+    },
+  };
+}
+
+export const scannerApi: ScannerApi = apiConfig.mode === 'live' && apiConfig.baseUrl
+  ? createHttpScannerApi({ baseUrl: apiConfig.baseUrl })
+  : apiConfig.mode === 'mock' ? createMockScannerApi() : createDisconnectedScannerApi(apiConfig.reason);
+
+export const POLL_INTERVAL_MS = 5000;
+export const healthOptions = queryOptions({ queryKey: ['health'], queryFn: () => scannerApi.health(), refetchInterval: 60000, retry: false });
+export const scanListOptions = queryOptions({ queryKey: ['scans'], queryFn: () => scannerApi.listScans(), retry: (count, error) => error instanceof ApiError && error.retryable && count < 2, refetchInterval: q => q.state.data?.some(s => activeStatuses.includes(s.status)) ? POLL_INTERVAL_MS * 2 : false });
+export const scanOptions = (id: string) => queryOptions({ queryKey: ['scans', id], queryFn: () => scannerApi.getScan(id), retry: (count, error) => error instanceof ApiError && error.retryable && count < 2, refetchInterval: q => q.state.data && activeStatuses.includes(q.state.data.status) ? POLL_INTERVAL_MS : false });
+export function saveReport(report: Report) { const url = URL.createObjectURL(new Blob([report.content], { type: report.mime })); const a = document.createElement('a'); a.href = url; a.download = report.filename; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 0); }
+export type { ReportFormat };

@@ -24,7 +24,7 @@ function Scanner() {
   const mutation = useMutation({ mutationFn: scannerApi.createScan, retry: false });
   const scanQuery = useQuery({ ...scanOptions(scanId), enabled: Boolean(scanId) });
   const scan = scanQuery.data;
-  const busy = mutation.isPending || Boolean(scan && activeStatuses.includes(scan.status) && !scanQuery.isError);
+  const busy = mutation.isPending || scanQuery.isFetching || Boolean(scan && activeStatuses.includes(scan.status) && !scanQuery.isError);
   const error = validationError || (mutation.error ? toApiError(mutation.error).message : '') || (scanQuery.error ? toApiError(scanQuery.error).message : '') || (scan?.status === 'Failed' ? redactEvidence(scan.error || 'The scanner failed. No completed results are available.') : scan?.status === 'Cancelled' ? 'The scan was cancelled by the backend.' : '');
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -54,7 +54,7 @@ function Scanner() {
       {busy && <p role="status">Scanning target…</p>}
       {error && <p id="scan-error" role="alert" className="scanner-error">{error}</p>}
     </div>
-    {scan?.status === 'Completed' && !scanQuery.isError && <section className="scanner-results" aria-label="Scan findings">
+    {scan?.status === 'Completed' && !scanQuery.isError && !scanQuery.isFetching && <section className="scanner-results" aria-label="Scan findings">
       {scan.results.length === 0 ? <p className="scanner-empty">The scanner returned no findings.</p> : scan.results.map(finding => <article className="scanner-finding" key={finding.id}>
         {(finding.title != null || finding.severity != null) && <header>
           {finding.title != null && <h2>{redactEvidence(finding.title)}</h2>}

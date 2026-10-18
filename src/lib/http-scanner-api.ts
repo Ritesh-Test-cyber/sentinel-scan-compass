@@ -25,16 +25,16 @@ export const scanDto = z.object({
 });
 export const findingDto = z.object({
   id: z.string().min(1).max(128),
-  title: z.string().max(300),
-  severity: severityDto,
-  confidence: z.enum(['low', 'medium', 'high']),
-  verification_status: z.enum(['potential', 'confirmed', 'false_positive']),
-  category: z.string().max(120),
-  affected_url: z.string().max(4096),
-  description: z.string().max(10000),
-  evidence: z.string().max(50000),
-  why_it_matters: z.string().max(10000),
-  remediation: z.string().max(10000),
+  title: z.string().max(300).nullish(),
+  severity: severityDto.nullish(),
+  confidence: z.enum(['low', 'medium', 'high']).nullish(),
+  verification_status: z.enum(['potential', 'confirmed', 'false_positive']).nullish(),
+  category: z.string().max(120).nullish(),
+  affected_url: z.string().max(4096).nullish(),
+  description: z.string().max(10000).nullish(),
+  evidence: z.string().max(50000).nullish(),
+  why_it_matters: z.string().max(10000).nullish(),
+  remediation: z.string().max(10000).nullish(),
   first_detected_at: isoDate.nullish(),
   related_endpoints: z.array(z.string().max(4096)).max(200).nullish(),
 });
@@ -47,7 +47,7 @@ export type FindingDto = z.infer<typeof findingDto>;
 const cap = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)) as Severity;
 const statusMap = { pending: 'Pending', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' } as const;
 export function normalizeFinding(f: FindingDto): Finding {
-  return { id: f.id, title: f.title, severity: cap(f.severity), confidence: cap(f.confidence) as Finding['confidence'], verification: f.verification_status === 'false_positive' ? 'False positive' : f.verification_status === 'confirmed' ? 'Confirmed' : 'Potential', category: f.category, affectedUrl: f.affected_url, description: f.description, evidence: f.evidence, whyItMatters: f.why_it_matters, remediation: f.remediation, ...(f.first_detected_at ? { firstDetectedAt: f.first_detected_at } : {}), relatedEndpoints: f.related_endpoints ?? [] };
+  return { id: f.id, ...(f.title != null ? { title: f.title } : {}), ...(f.severity ? { severity: cap(f.severity) } : {}), ...(f.confidence ? { confidence: cap(f.confidence) as Finding['confidence'] } : {}), ...(f.verification_status ? { verification: f.verification_status === 'false_positive' ? 'False positive' as const : f.verification_status === 'confirmed' ? 'Confirmed' as const : 'Potential' as const } : {}), ...(f.category != null ? { category: f.category } : {}), ...(f.affected_url != null ? { affectedUrl: f.affected_url } : {}), ...(f.description != null ? { description: f.description } : {}), ...(f.evidence != null ? { evidence: f.evidence } : {}), ...(f.why_it_matters != null ? { whyItMatters: f.why_it_matters } : {}), ...(f.remediation != null ? { remediation: f.remediation } : {}), ...(f.first_detected_at ? { firstDetectedAt: f.first_detected_at } : {}), ...(f.related_endpoints ? { relatedEndpoints: f.related_endpoints } : {}) };
 }
 export function normalizeScan(dto: ScanDto, results: Finding[] = []): ScanRecord {
   const status = statusMap[dto.status];
@@ -120,10 +120,9 @@ export function createHttpScannerApi(options: HttpAdapterOptions): ScannerApi {
     },
     async createScan(input) {
       const valid = createScanSchema.parse(input);
-      const res = await request('/api/scans', { method: 'POST', body: { target_url: valid.target, name: valid.name || null, profile: valid.profile.toLowerCase(), authorization_confirmed: true } });
+      const res = await request('/api/scans', { method: 'POST', body: { target_url: valid.target, name: valid.name || null, profile: valid.profile.toLowerCase(), ...(valid.authorized === true ? { authorization_confirmed: true } : {}) } });
       const dto = parse(scanDto, await json(res));
-      // A freshly created scan must be queued or running; anything else is not a valid creation response.
-      if (dto.status !== 'pending' && dto.status !== 'running') throw new ApiError('invalid_response');
+      // Preserve the backend's actual lifecycle, including synchronous completion or failure.
       return normalizeScan(dto);
     },
     async exportReport(id, format: ReportFormat) {

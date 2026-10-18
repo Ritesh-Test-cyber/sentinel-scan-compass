@@ -10,7 +10,9 @@
 <!-- LOVABLE:END -->
 
 ## WebSentinel architecture
-- Keep scan reads, creation, and exports behind the typed ScannerApi abstraction; its mock adapter never contacts targets, allowing a future FastAPI adapter without UI transport logic.
-- Use TanStack Query loader-backed data and API-returned IDs for navigation; this keeps loading, retries, and cache invalidation consistent.
-- Share scan display and state components across routes; this keeps demo labeling and lifecycle handling consistent.
+- Keep the single scanner screen at `/`; no workspace shell or secondary feature routes, to preserve the minimal workflow.
+- Keep scan creation and reads behind the existing typed ScannerApi HTTP adapter; missing configuration must fail rather than select a mock adapter.
+- Use a TanStack Query mutation followed by ID-keyed polling for user-initiated scans; never automatically resubmit POST requests or invent progress.
+- Omit authorization_confirmed unless the caller explicitly supplies true; a URL submission must not manufacture target authorization.
+- Render only available backend finding fields as redacted React text; never trust evidence as HTML.
 - Live adapters must enforce authenticated ownership, explicit target authorization, connection-time IP/DNS and redirect checks, timeouts, and request budgets server-side; browser validation is not a security boundary.

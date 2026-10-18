@@ -10,7 +10,7 @@ describe('Minimal scanner API', () => {
     expect(createScanSchema.safeParse({ ...input, target }).success).toBe(false);
   });
   it('accepts a URL without inventing authorization confirmation', async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify(dto)));
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(dto)));
     const api = createHttpScannerApi({ baseUrl: 'https://backend.example', fetch: fetcher });
     const created = await api.createScan(input);
     expect(created.id).toBe('backend-id');

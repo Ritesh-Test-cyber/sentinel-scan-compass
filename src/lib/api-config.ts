@@ -4,14 +4,10 @@ export type ApiConfig = { mode: ApiMode; baseUrl: string | null; reason: string 
 /**
  * Resolves which scanner adapter to use from Vite env values:
  * - VITE_API_BASE_URL set (http/https) -> live FastAPI adapter.
- * - VITE_USE_MOCK_API=true in a dev build -> mock adapter (local UI development only).
- * - No base URL in a dev build -> mock adapter, clearly labeled.
- * - Production build without a valid base URL -> disconnected. Mock data is never used in production.
+ * - Missing or invalid URL -> disconnected in every environment. Never use demo data.
  */
 export function resolveApiConfig(env: { baseUrl?: string | undefined; useMock?: string | undefined; dev: boolean }): ApiConfig {
   const raw = env.baseUrl?.trim();
-  const wantsMock = env.useMock === 'true';
-  if (wantsMock && env.dev) return { mode: 'mock', baseUrl: null, reason: 'Mock mode enabled with VITE_USE_MOCK_API for local UI development.' };
   if (raw) {
     try {
       const url = new URL(raw);
@@ -21,8 +17,7 @@ export function resolveApiConfig(env: { baseUrl?: string | undefined; useMock?: 
       return { mode: 'disconnected', baseUrl: null, reason: 'VITE_API_BASE_URL is not a valid http(s) URL without credentials.' };
     }
   }
-  if (env.dev) return { mode: 'mock', baseUrl: null, reason: 'No VITE_API_BASE_URL is set, so the development build uses the mock adapter.' };
-  return { mode: 'disconnected', baseUrl: null, reason: wantsMock ? 'Mock mode is disabled in production builds. Set VITE_API_BASE_URL.' : 'VITE_API_BASE_URL is not configured for this build.' };
+  return { mode: 'disconnected', baseUrl: null, reason: 'Set VITE_API_BASE_URL to the existing scanner backend URL.' };
 }
 
 export const apiConfig: ApiConfig = resolveApiConfig({

@@ -1,17 +1,16 @@
 import { z } from 'zod';
-import type { ScanStatus, Severity } from './demo-data';
-
-export type { ScanStatus, Severity };
+export type ScanStatus = 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
+export type Severity = 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
 export const createScanSchema = z.object({
   target: z.string().trim().min(1, 'Enter a target base URL.').max(2048, 'The URL is too long.').url('Enter a valid URL, for example https://app.example.com.').refine(value => { try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password; } catch { return false; } }, 'Use an http:// or https:// URL without embedded credentials.'),
   name: z.string().trim().max(100, 'Use 100 characters or fewer.').optional(),
   profile: z.enum(['Basic', 'Standard']),
-  authorized: z.boolean().refine(value => value, 'Confirm that you own this system or have explicit permission to test it.'),
+  authorized: z.literal(true).optional(),
 });
 export type CreateScanInput = z.infer<typeof createScanSchema>;
 export type Confidence = 'High' | 'Medium' | 'Low';
 export type Verification = 'Potential' | 'Confirmed' | 'False positive';
-export type Finding = { id: string; title: string; severity: Severity; category: string; path?: string; description: string; evidence: string; remediation: string; confidence: Confidence; verification: Verification; affectedUrl: string; whyItMatters: string; firstDetectedAt?: string; relatedEndpoints?: string[] };
+export type Finding = { id: string; title?: string; severity?: Severity; category?: string; path?: string; description?: string; evidence?: string; remediation?: string; confidence?: Confidence; verification?: Verification; affectedUrl?: string; whyItMatters?: string; firstDetectedAt?: string; relatedEndpoints?: string[] };
 export type SeverityCounts = Record<Severity, number>;
 export type ReportFormat = 'json' | 'html';
 export type ScanRecord = {

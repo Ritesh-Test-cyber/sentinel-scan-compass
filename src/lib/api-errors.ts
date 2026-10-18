@@ -14,7 +14,7 @@ export type ApiErrorKind =
 const defaults: Record<ApiErrorKind, string> = {
   disconnected: 'The WebSentinel backend is not reachable. Check that the API is running and that the frontend is configured with its URL.',
   timeout: 'The backend did not respond in time. Please try again in a moment.',
-  unauthorized: 'Your session is missing or has expired. Sign in again to view your scans.',
+  unauthorized: 'The backend requires an authenticated session before scanning. No scan results are available.',
   forbidden: 'You do not have permission to access this resource. Scans are only visible to their owner.',
   not_found: 'The requested record was not found or is not available to your account.',
   validation: 'The backend rejected the request. Review the highlighted fields and try again.',

@@ -44,7 +44,7 @@ describe('FindingsList', () => {
     expect(screen.getByText('Missing Content-Security-Policy header')).toBeTruthy();
     expect(screen.getByText('Confidence: High')).toBeTruthy();
     expect(screen.getAllByText('Potential').length).toBe(2);
-    expect(screen.getByText(/authorization: Bearer \[REDACTED\]/)).toBeTruthy();
+    expect(screen.getByText(/authorization: \[REDACTED\]/)).toBeTruthy();
     expect(screen.queryByText(/secret-token-123/)).toBeNull();
   });
   it('shows the limitations notice and never claims the target is secure', () => {
